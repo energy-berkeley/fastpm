@@ -1,12 +1,12 @@
 #
 # Pick the MPI C compiler
-# CC = mpicc
+ CC = mpicc
 #
 
 #
 # cc flag to enable OPENMP
 #
-# OPENMP = -fopenmp
+ OPENMP = -fopenmp
 #
 
 #
@@ -16,7 +16,7 @@
 #
 # Usually, use
 # 
-# CPPFLAGS = -DFASTPM_FFT_PRECISION=32
+ CPPFLAGS = -DFASTPM_FFT_PRECISION=32
 
 #
 # Set special LDFLAGS, 
@@ -33,5 +33,5 @@ OPTIMIZE = -O3 -g
 #
 # On some systems, DEPCMD has to be modified to include MPI headers
 #
-# DEPCMD = gcc -MG -MP -MT .objs/$(<:%.c=%.o) -MM 
+ DEPCMD = gcc -MG -MP -MT .objs/$(<:%.c=%.o) -MM 
 
