@@ -27,7 +27,7 @@ elseif args[1] == 'zola' then
 elseif args[1] == 'fastpm' then
     za = false
     force_mode = "fastpm"
-    time_step = linspace(0.1, 1, 5)
+    time_step = linspace(0.1, 1, 20)
 elseif args[1] == 'ic' then
     za = false
     force_mode = "zola"

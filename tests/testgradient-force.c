@@ -33,7 +33,7 @@ objective(FastPMSolver * solver,  FastPMStore * p)
 {
     FastPMFloat * delta_k = pm_alloc(solver->basepm);
 
-    fastpm_gravity_calculate(solver->gravity, solver->basepm, p, delta_k);
+//    fastpm_gravity_calculate(solver->gravity, solver->basepm, p, delta_k); FIXME changed to fastpm_solver_gravity
 
     double s = chi2(solver->basepm, p);
 
@@ -49,7 +49,7 @@ objective_gradient(FastPMSolver * solver, FastPMStore * p, FastPMStore * grad_po
 
     FastPMFloat * delta_k = pm_alloc(solver->basepm);
 
-    fastpm_gravity_calculate(solver->gravity, solver->basepm, p, delta_k);
+//    fastpm_gravity_calculate(solver->gravity, solver->basepm, p, delta_k); FIXME changed to fastpm_solver_gravity
     pm_free(solver->basepm, delta_k);
     chi2_gradient(solver->basepm, p, tmp);
 

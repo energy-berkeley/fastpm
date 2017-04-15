@@ -20,6 +20,7 @@ TEST_SOURCES = testpm.c \
                testgradient-r2c.c \
                testgradient-force.c \
                testgradient-force-simple.c \
+			   testnu.c \
 
 TESTS = $(TEST_SOURCES:%.c=%)
 
@@ -68,6 +69,10 @@ testgradient-force: .objs/testgradient-force.o $(LIBFASTPM_LIBS)
 
 testgradient-force-simple: .objs/testgradient-force-simple.o $(LIBFASTPM_LIBS)
 	$(CC) $(OPTIMIZE) $(OPENMP) -o $@ $^ \
+	    $(LDFLAGS) -lgsl -lgslcblas -lm
+
+testnu: .objs/testnu.o $(LIBFASTPM_LIBS)
+	$(CC) -g $(OPTIMIZE) $(OPENMP) -o $@ $^ \
 	    $(LDFLAGS) -lgsl -lgslcblas -lm
 
 -include $(SOURCES:%.c=.deps/%.d)

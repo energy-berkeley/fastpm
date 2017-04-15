@@ -70,8 +70,8 @@ typedef double (*fastpm_kernelfunc)(double x, double hsupport);
 #include "initialcondition.h"
 #include "pngaussian.h"
 #include "powerspectrum.h"
-#include "gravity.h"
 #include "solver.h"
+#include "gravity.h"
 #include "events.h"
 #include "timemachine.h"
 

@@ -235,7 +235,6 @@ fastpm_do_force(FastPMSolver * fastpm, FastPMTransition * trans)
 
     CLOCK(decompose);
     CLOCK(force);
-    CLOCK(afterforce);
 
     fastpm->pm = fastpm_find_pm(fastpm, trans->a.f);
 
@@ -243,26 +242,14 @@ fastpm_do_force(FastPMSolver * fastpm, FastPMTransition * trans)
 
     fastpm->info.Nmesh = fastpm->pm->init.Nmesh;
 
-    FastPMFloat * delta_k = pm_alloc(pm);
     ENTER(decompose);
     fastpm_decompose(fastpm);
     LEAVE(decompose);
 
+
     ENTER(force);
-
-    fastpm_gravity_calculate(gravity, pm, fastpm->p, delta_k);
+    fastpm_solver_gravity_calculate(fastpm, gravity, pm, fastpm->p, trans);
     LEAVE(force);
-
-    ENTER(afterforce);
-
-    FastPMForceEvent event[1];
-    event->delta_k = delta_k;
-    event->a_f = trans->a.f;
-
-    fastpm_solver_emit_event(fastpm, FASTPM_EVENT_FORCE, FASTPM_EVENT_STAGE_AFTER, (FastPMEvent*) event);
-    LEAVE(afterforce);
-
-    pm_free(pm, delta_k);
 
 }
 

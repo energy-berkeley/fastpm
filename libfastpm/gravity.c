@@ -187,11 +187,13 @@ apply_dealiasing_transfer(FastPMGravity * gravity, PM * pm, FastPMFloat * from, 
 }
 
 void
-fastpm_gravity_calculate(FastPMGravity * gravity,
+fastpm_solver_gravity_calculate(FastPMSolver * fastpm,
+    FastPMGravity * gravity,
     PM * pm,
     FastPMStore * p,
-    FastPMFloat * delta_k)
+    FastPMTransition * trans)
 {
+    FastPMFloat * delta_k = pm_alloc(pm);
     FastPMPainter reader[1];
     FastPMPainter painter[1];
 
@@ -233,6 +235,15 @@ fastpm_gravity_calculate(FastPMGravity * gravity,
     /* calculate the forces save them to p->acc */
     apply_dealiasing_transfer(gravity, pm, delta_k, delta_k);
 
+
+    /*emit before force event*/
+    CLOCK(beforeforce);
+    FastPMForceEvent eventb[1];
+    eventb->delta_k = delta_k;
+    eventb->a_f = trans->a.f;
+    fastpm_solver_emit_event(fastpm, FASTPM_EVENT_FORCE, FASTPM_EVENT_STAGE_BEFORE, (FastPMEvent*) eventb);
+    LEAVE(beforeforce);
+
     int d;
     int ACC[] = {PACK_ACC_X, PACK_ACC_Y, PACK_ACC_Z, PACK_POTENTIAL};
     for(d = 0; d < (gravity->ComputePotential?4:3); d ++) {
@@ -253,8 +264,17 @@ fastpm_gravity_calculate(FastPMGravity * gravity,
         LEAVE(reduce);
     }
 
-    pm_free(pm, canvas);
+    CLOCK(afterforce);
+    FastPMForceEvent event[1];
+    event->delta_k = delta_k;
+    event->a_f = trans->a.f;
 
+    fastpm_solver_emit_event(fastpm, FASTPM_EVENT_FORCE, FASTPM_EVENT_STAGE_AFTER, (FastPMEvent*) event);
+    LEAVE(afterforce);
+
+
+    pm_free(pm, canvas);
+    pm_free(pm, delta_k);
     pm_ghosts_free(pgd);
 }
 

@@ -23,12 +23,13 @@ void fastpm_recorder_seek(FastPMRecorder * recorder, FastPMState * state, FastPM
 
 void fastpm_recorder_destroy(FastPMRecorder * recorder);
 
-void fastpm_recorder_gradient_dot(FastPMRecorder * recorder, FastPMStore * vector, FastPMStore * gradient);
+//void fastpm_recorder_gradient_dot(FastPMRecorder * recorder, FastPMStore * vector, FastPMStore * gradient);
 
 static void
 record_transition(FastPMSolver * solver, FastPMTransitionEvent * event, FastPMRecorder * recorder)
 {
     fastpm_recorder_record(recorder, event->transition, solver->p);
+printf("Running the events \n");
 }
 
 static int 
@@ -53,7 +54,7 @@ int main(int argc, char * argv[]) {
     fastpm_set_msg_handler(fastpm_default_msg_handler, comm, NULL);
 
     FastPMConfig * config = & (FastPMConfig) {
-        .nc = 32,
+        .nc = 2,
         .boxsize = 32.,
         .alloc_factor = 2.0,
         .omega_m = 0.292,
@@ -80,6 +81,7 @@ int main(int argc, char * argv[]) {
     FastPMFloat * rho_init_ktruth = pm_alloc(solver->basepm);
     FastPMFloat * rho_final_ktruth = pm_alloc(solver->basepm);
     FastPMFloat * rho_final_xtruth = pm_alloc(solver->basepm);
+    FastPMFloat * delta_k = pm_alloc(solver->basepm);
 
     /* First establish the truth by 2lpt -- this will be replaced with PM. */
     struct fastpm_powerspec_eh_params eh = {
@@ -102,13 +104,20 @@ int main(int argc, char * argv[]) {
     fastpm_painter_init(painter, solver->basepm, config->PAINTER_TYPE, config->painter_support);
 
     fastpm_paint(painter, rho_final_xtruth, solver->p, NULL, 0);
-    //fastpm_utils_dump(solver->basepm, "fastpm_rho_final_xtruth.raw", rho_final_xtruth);
+    fastpm_utils_dump(solver->basepm, "fastpm_rho_final_xtruth.raw", rho_final_xtruth);
+
+    pm_r2c(solver->basepm, rho_final_xtruth, delta_k);
+    fastpm_utils_dump(solver->basepm, "fastpm_final_deltak.raw", delta_k);
+
+    printf("I am running\n");
+    
 
     fastpm_recorder_destroy(recorder);
 
     pm_free(solver->basepm, rho_final_xtruth);
     pm_free(solver->basepm, rho_final_ktruth);
     pm_free(solver->basepm, rho_init_ktruth);
+    pm_free(solver->basepm, delta_k);
 
     fastpm_solver_destroy(solver);
     libfastpm_cleanup();
@@ -215,11 +224,11 @@ void fastpm_recorder_destroy(FastPMRecorder * recorder)
     free(recorder->tape);
 }
 
-void fastpm_recorder_gradient(FastPMRecorder * recorder, FastPMStore * vector, FastPMStore * gradient)
-{
+//void fastpm_recorder_gradient(FastPMRecorder * recorder, FastPMStore * vector, FastPMStore * gradient)
+//{
     /* backward differentiation;
      * vector: the gradient from xi^2 to final particle position.
      * gradient : the gradieint from xi^2 to initial position.
      */
 
-}
+//}

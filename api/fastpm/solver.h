@@ -10,6 +10,15 @@ typedef struct FastPMDriftFactor FastPMDriftFactor;
 typedef struct FastPMKickFactor FastPMKickFactor;
 typedef struct FastPMEventHandler FastPMEventHandler;
 
+
+typedef struct {
+    FastPMKernelType KernelType;
+    FastPMDealiasingType DealiasingType;
+    FastPMPainterType PainterType;
+    int PainterSupport;
+    int ComputePotential;
+} FastPMGravity;
+
 typedef struct {
     size_t nc;
     double boxsize;
