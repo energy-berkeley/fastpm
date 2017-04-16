@@ -9,7 +9,6 @@
 #include <fastpm/logging.h>
 
 
-
 typedef struct {
     FastPMSolver * solver;
     FastPMFloat ** tape;
@@ -100,8 +99,7 @@ void fastpm_recorder_init(FastPMRecorder * recorder, FastPMSolver * solver, int 
     recorder->solver = solver;
     recorder->tape = calloc(maxsteps, sizeof(FastPMStore));
 	recorder->step = 0;
-    VPM * vpm = vpm_find(solver->vpm_list, 1.0);
-    recorder->pm = &vpm->pm;
+    recorder->pm = fastpm_find_pm(solver, 1.0);
     int j =0;
     for(j =0; j <= (maxsteps-1); ++j){
         recorder->tape[j] = pm_alloc(recorder->pm);
@@ -111,6 +109,10 @@ void fastpm_recorder_init(FastPMRecorder * recorder, FastPMSolver * solver, int 
 
 void fastpm_recorder_destroy(FastPMRecorder * recorder)
 {
+    int j =0;
+    for(j =0; j <= (recorder->maxsteps-1); ++j){
+        pm_free(recorder->pm, recorder->tape[j]);
+        }
     free(recorder->tape);
 }
 
