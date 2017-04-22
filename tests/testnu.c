@@ -4,14 +4,29 @@
 #include <alloca.h>
 #include <mpi.h>
 #include <math.h>
+#include <gsl/gsl_math.h>
+#include <gsl/gsl_interp2d.h>
+#include <gsl/gsl_spline2d.h>
 
 #include <fastpm/libfastpm.h>
 #include <fastpm/logging.h>
 
+//We would like to couple neutrinos into the dark matter evolution.
+//Stage 1: read in and record all the overdensity field. ---- done
+//Let's do Simpson rule instead. So no interpolation needed. -- to stage 3
+ 
+//Stage 2: interpolate the read overdensity. ---- skipped first.
+//Stage 3: integrate out the overdendity
+//Stage 4: feed the neutrino overdensity into force calculation
+
+
+// Side check: time fourier transform of the delta k, frequncy amplitude to look at smothness.
+// Change to check with linear theory.
 
 typedef struct {
     FastPMSolver * solver;
     FastPMFloat ** tape;
+    FastPMFloat ** Nu;
     PM * pm;
     int step;
     int maxsteps;
@@ -24,6 +39,36 @@ void fastpm_recorder_destroy(FastPMRecorder * recorder);
 static void
 record_cdm(FastPMSolver * solver, FastPMForceEvent * event, FastPMRecorder * recorder);
 
+static void Del_interp(FastPMRecorder * recorder);
+
+double Sint(double a);
+
+double SupCon(double ai,double af);
+
+double kdifs(double *k,double ai,double af,double a){
+    return kdif
+kdif[j] = k[j]*SupCon(a[j],af);
+}
+
+double CurlyInum(double *x){
+    return (1.+0.0168*x^2+0.0407*x^4);
+}
+
+double CurlyIden(double *x){
+    return 1.+2.1734*x^2+1.6787*x^4.1811+0.1467*x^8;
+}
+
+double CurlyI(double *x){
+    int j = 0;
+    double I[] = x;
+    for(;x[j];++j) I[j] = CurlyInum(x[j])/CurlyIden(x[j]);
+    return I;
+}
+
+
+double simpson(double ** data, double da, int i, int ind);
+
+
 int main(int argc, char * argv[]) {
 
     MPI_Init(&argc, &argv);
@@ -35,8 +80,8 @@ int main(int argc, char * argv[]) {
     fastpm_set_msg_handler(fastpm_default_msg_handler, comm, NULL);
 
     FastPMConfig * config = & (FastPMConfig) {
-        .nc = 64,
-        .boxsize = 64.,
+        .nc = 256,
+        .boxsize = 256.,
         .alloc_factor = 2.0,
         .omega_m = 0.292,
         .vpminit = (VPMInit[]) {
@@ -73,7 +118,10 @@ int main(int argc, char * argv[]) {
     fastpm_ic_induce_correlation(solver->basepm, rho_init_ktruth, (fastpm_fkfunc)fastpm_utils_powerspec_eh, &eh);
 
     write_complex(solver->basepm, rho_init_ktruth, "Truth", "Delta_k", 1);
-    double time_step[] = {0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, .9, 1.0};
+    double time_step[] = {0.10, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, .9, 1.0};
+//    double time_step[] = {0.0  ,  0.05,  0.1 ,  0.15,  0.2 ,  0.25,  0.3 ,  0.35,  0.4 ,
+//        0.45,  0.5 ,  0.55,  0.6 ,  0.65,  0.7 ,  0.75,  0.8 ,  0.85,
+//        0.9 ,  0.95,  1.0};
     fastpm_solver_setup_ic(solver, rho_init_ktruth);
 
     fastpm_recorder_init(recorder, solver, 10);
@@ -98,11 +146,13 @@ void fastpm_recorder_init(FastPMRecorder * recorder, FastPMSolver * solver, int 
     recorder->maxsteps = maxsteps;
     recorder->solver = solver;
     recorder->tape = calloc(maxsteps, sizeof(FastPMStore));
+    recorder->Nu = calloc(maxsteps, sizeof(FastPMStore));
 	recorder->step = 0;
     recorder->pm = fastpm_find_pm(solver, 1.0);
     int j =0;
     for(j =0; j <= (maxsteps-1); ++j){
         recorder->tape[j] = pm_alloc(recorder->pm);
+        recorder->Nu[j] = pm_alloc(recorder->pm);
         }
 }
 
@@ -112,8 +162,10 @@ void fastpm_recorder_destroy(FastPMRecorder * recorder)
     int j =0;
     for(j =0; j <= (recorder->maxsteps-1); ++j){
         pm_free(recorder->pm, recorder->tape[j]);
+        pm_free(recorder->pm, recorder->Nu[j]);
         }
     free(recorder->tape);
+    free(recorder->Nu);
 }
 
 
@@ -122,7 +174,7 @@ void fastpm_recorder_destroy(FastPMRecorder * recorder)
 static void record_cdm(FastPMSolver * solver, FastPMForceEvent * event, FastPMRecorder * recorder)
 {
     char buf[1024];
-    sprintf(buf, "deltakbefore_%0.04f.dat", event->a_f);
+    sprintf(buf, "Smooth%0.04f.dat", event->a_f);
     printf("The step %g\n", event->a_f);
     FastPMFloat * dst = recorder->tape[recorder->step];
     pm_assign(solver->pm, event->delta_k, dst);
@@ -144,9 +196,53 @@ static void record_cdm(FastPMSolver * solver, FastPMForceEvent * event, FastPMRe
             double value2 = real2 * real2 + imag2 * imag2;
             printf("Delta_k from event = %g + %gi, abs = %g\n", real1, imag1, value1);
             printf("Delta_k from tape = %g + %gi, abs = %g\n", real2, imag2, value2);
+            // Start integrating
+            int j = 0;
+            
+            for(j=0;j<=recorder->step;++j){
+                recorder->Nu[recorder->step][ind + 0] = simpson(recorder->tape, 0.1, recorder->step, ind);
+                recorder->Nu[recorder->step][ind + 1] = simpson(recorder->tape, 0.1, recorder->step, ind+1);
+            }
+            double real3 = recorder->Nu[recorder->step][ind + 0];
+            double imag3 = recorder->Nu[recorder->step][ind + 1];
+            double value3 = real3 * real3 + imag3 * imag3;
+            printf("Nu = %g + %gi, abs = %g\n", real3, imag3, value3);
+
+
         }
 
     } 
     recorder->step = recorder->step +1;
     write_complex(solver->pm, event->delta_k, buf, "Delta_k", 1);
 }
+
+static void Del_interp(FastPMRecorder * recorder)
+{
+    const gsl_interp2d_type *T = gsl_interp2d_bilinear;
+    const size_t N = 100;
+// we need to interpolate all kx ky kz????? 
+// N^3 interpolation?
+}
+
+
+double simpson(double ** data, double da, int i, int ind){
+
+    double inte = 0;
+    int j = 0;
+    for(j =0;j<=i;++j){
+        if(!(i%2)){
+            if(j == 0) inte = da/3*data[0][ind];
+            else if (j>0 && j%2 && j<i) inte += 4*da/3*data[j][ind];
+            else if (j>0 && !(j%2) && j<i) inte += 2*da/3*data[j][ind];
+            else if (j == i) inte += da/3*data[j][ind];
+        }
+        else{
+            if(j == 0) inte = da/3*data[0][ind];
+            else if (j>0 && j%2 && j<i) inte += 2*da/3*data[j][ind];
+            else if (j>0 && !(j%2) && j<i) inte += 4*da/3*data[j][ind];
+            else if (j == i) inte += da/3*data[j][ind];
+        }
+    }
+    return inte;
+}
+
