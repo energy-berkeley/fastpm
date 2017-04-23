@@ -7,6 +7,7 @@
 #include <gsl/gsl_math.h>
 #include <gsl/gsl_interp2d.h>
 #include <gsl/gsl_spline2d.h>
+#include <gsl/gsl_integration.h>
 
 #include <fastpm/libfastpm.h>
 #include <fastpm/logging.h>
@@ -16,7 +17,7 @@
 //Let's do Simpson rule instead. So no interpolation needed. -- to stage 3
  
 //Stage 2: interpolate the read overdensity. ---- skipped first.
-//Stage 3: integrate out the overdendity
+//Stage 3: integrate out the overdendity --- in progress.
 //Stage 4: feed the neutrino overdensity into force calculation
 
 
@@ -41,9 +42,19 @@ record_cdm(FastPMSolver * solver, FastPMForceEvent * event, FastPMRecorder * rec
 
 static void Del_interp(FastPMRecorder * recorder);
 
-double Sint(double a);
+double Sint(double a){
+    return 1.0/pow(a,3)/20.0;  //How to implement this correctly? HubbleEa(a, fastpm->cosmology); //70.0; //Planck15.H((1.-a)/a)
+}
 
-double SupCon(double ai,double af);
+double SupCon(double ai,double af){
+    gsl_integration_workspace * w= gsl_integration_workspace_alloc (1000);
+    double result, error;
+    gsl_function F;
+
+    F.function = &Sint;
+    gsl_integration_qags(&F, ai, af, 1e-7, 1000, w, &result, &error);
+    return result;
+}
 
 double kdifs(double *k,double ai,double af,double a){
     return kdif
