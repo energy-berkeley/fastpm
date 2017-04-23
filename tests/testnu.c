@@ -24,6 +24,10 @@
 // Side check: time fourier transform of the delta k, frequncy amplitude to look at smothness.
 // Change to check with linear theory.
 
+#define m = 0.6 //in eV
+#define c = 3e8 // in m/s
+#define chunit = 1.68e-4/m/0.678*c/1000;
+
 typedef struct {
     FastPMSolver * solver;
     FastPMFloat ** tape;
@@ -43,7 +47,7 @@ record_cdm(FastPMSolver * solver, FastPMForceEvent * event, FastPMRecorder * rec
 static void Del_interp(FastPMRecorder * recorder);
 
 double Sint(double a){
-    return 1.0/pow(a,3)/20.0;  //How to implement this correctly? HubbleEa(a, fastpm->cosmology); //70.0; //Planck15.H((1.-a)/a)
+    return 1.0/pow(a,3)/20.0;  //How to implement this correctly? HubbleEa(a, fastpm->cosmology)*71.9*71.9*71.9*71.9*71.9*71.9*71.9*71.9; //70.0; //Planck15.H((1.-a)/a)
 }
 
 double SupCon(double ai,double af){
@@ -56,26 +60,32 @@ double SupCon(double ai,double af){
     return result;
 }
 
-double kdifs(double *k,double ai,double af,double a){
-    return kdif
-kdif[j] = k[j]*SupCon(a[j],af);
+double kdifs(double k,double ai,double af,double a){
+    return k*SupCon(a,af);
 }
 
-double CurlyInum(double *x){
-    return (1.+0.0168*x^2+0.0407*x^4);
+double CurlyInum(double x){
+    return (1.0+0.0168*pow(x,2)+0.0407*pow(x,4));
 }
 
-double CurlyIden(double *x){
-    return 1.+2.1734*x^2+1.6787*x^4.1811+0.1467*x^8;
+double CurlyIden(double x){
+    return 1.0+2.1734*pow(x,2)+1.6787*pow(x,4.1811)+0.1467*pow(x,8);
 }
 
-double CurlyI(double *x){
-    int j = 0;
-    double I[] = x;
-    for(;x[j];++j) I[j] = CurlyInum(x[j])/CurlyIden(x[j]);
-    return I;
+double CurlyI(double x){
+    return CurlyInum(x)/CurlyIden(x);
 }
 
+double Inte(double a,double k,double ai,double af){
+    x = kdifs(k,ai,af,a)*chunit
+    return CurlyI(x)*kdifs(k,ai,af,a)/k*IntDen(k,a)/pow(a,2)// Planck15.H((1.-a)/a).value/a**2
+}
+
+double DelNu(double k,double da,int i){
+
+    Del = simpson(Inte, da, i)
+    return Del
+}
 
 double simpson(double ** data, double da, int i, int ind);
 
