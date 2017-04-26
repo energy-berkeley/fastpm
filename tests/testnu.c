@@ -24,9 +24,9 @@
 // Side check: time fourier transform of the delta k, frequncy amplitude to look at smothness.
 // Change to check with linear theory.
 
-#define m = 0.6 //in eV
-#define c = 3e8 // in m/s
-#define chunit = 1.68e-4/m/0.678*c/1000;
+#define m  0.6; //in eV
+#define c  3e8; // in m/s
+#define chunit  1.68e-4/0.6/0.678*3e8/1000;
 
 typedef struct {
     FastPMSolver * solver;
@@ -35,9 +35,10 @@ typedef struct {
     PM * pm;
     int step;
     int maxsteps;
+    double * time_step;
 } FastPMRecorder;
 
-void fastpm_recorder_init(FastPMRecorder * recorder, FastPMSolver * solver, int maxsteps);
+void fastpm_recorder_init(FastPMRecorder * recorder, FastPMSolver * solver, int maxsteps, double * time_step);
 
 void fastpm_recorder_destroy(FastPMRecorder * recorder);
 
@@ -77,17 +78,22 @@ double CurlyI(double x){
 }
 
 double Inte(double a,double k,double ai,double af){
-    x = kdifs(k,ai,af,a)*chunit
-    return CurlyI(x)*kdifs(k,ai,af,a)/k*IntDen(k,a)/pow(a,2)// Planck15.H((1.-a)/a).value/a**2
+    double x = kdifs(k,ai,af,a)*chunit;
+    return CurlyI(x)*kdifs(k,ai,af,a)/k/pow(a,2);// Planck15.H((1.-a)/a).value/a**2
 }
 
-double DelNu(double k,double da,int i){
+double simpson(double * data, double da, int i);
 
-    Del = simpson(Inte, da, i)
-    return Del
+double DelNu(double * Del,double da,int i, double * a, double k){
+    double data[10];//FIXME hard coded array size
+    int j = 0;
+    for(;j<=i;++j){
+        data[j] = Inte(a[j],k,a[0],a[9])*Del[j];/*af = a[9]?*/
+    }
+    double result = simpson(data, da, i);
+    return result;
 }
 
-double simpson(double ** data, double da, int i, int ind);
 
 
 int main(int argc, char * argv[]) {
@@ -99,6 +105,11 @@ int main(int argc, char * argv[]) {
     MPI_Comm comm = MPI_COMM_WORLD;
 
     fastpm_set_msg_handler(fastpm_default_msg_handler, comm, NULL);
+
+    double time_step[] = {0.10, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, .9, 1.0};
+//    double time_step[] = {0.0  ,  0.05,  0.1 ,  0.15,  0.2 ,  0.25,  0.3 ,  0.35,  0.4 ,
+//        0.45,  0.5 ,  0.55,  0.6 ,  0.65,  0.7 ,  0.75,  0.8 ,  0.85,
+//        0.9 ,  0.95,  1.0};
 
     FastPMConfig * config = & (FastPMConfig) {
         .nc = 256,
@@ -139,13 +150,9 @@ int main(int argc, char * argv[]) {
     fastpm_ic_induce_correlation(solver->basepm, rho_init_ktruth, (fastpm_fkfunc)fastpm_utils_powerspec_eh, &eh);
 
     write_complex(solver->basepm, rho_init_ktruth, "Truth", "Delta_k", 1);
-    double time_step[] = {0.10, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, .9, 1.0};
-//    double time_step[] = {0.0  ,  0.05,  0.1 ,  0.15,  0.2 ,  0.25,  0.3 ,  0.35,  0.4 ,
-//        0.45,  0.5 ,  0.55,  0.6 ,  0.65,  0.7 ,  0.75,  0.8 ,  0.85,
-//        0.9 ,  0.95,  1.0};
     fastpm_solver_setup_ic(solver, rho_init_ktruth);
 
-    fastpm_recorder_init(recorder, solver, 10);
+    fastpm_recorder_init(recorder, solver, 10, time_step);
 
     fastpm_solver_evolve(solver, time_step, sizeof(time_step) / sizeof(time_step[0]));
 
@@ -162,7 +169,7 @@ int main(int argc, char * argv[]) {
     return 0;
 }
 
-void fastpm_recorder_init(FastPMRecorder * recorder, FastPMSolver * solver, int maxsteps)
+void fastpm_recorder_init(FastPMRecorder * recorder, FastPMSolver * solver, int maxsteps, double * time_step)
 {
     recorder->maxsteps = maxsteps;
     recorder->solver = solver;
@@ -175,6 +182,7 @@ void fastpm_recorder_init(FastPMRecorder * recorder, FastPMSolver * solver, int 
         recorder->tape[j] = pm_alloc(recorder->pm);
         recorder->Nu[j] = pm_alloc(recorder->pm);
         }
+    recorder->time_step = time_step;
 }
 
 
@@ -208,6 +216,7 @@ static void record_cdm(FastPMSolver * solver, FastPMForceEvent * event, FastPMRe
         if(kiter.iabs[0] == 1 &&
                 kiter.iabs[1] == 1 &&
                 kiter.iabs[2] == 1) {
+            double scark = sqrt(kiter.kk[0] + kiter.kk[1] + kiter.kk[2]);
             double real1 = event->delta_k[ind + 0];
             double imag1 = event->delta_k[ind + 1];
             double value1 = real1 * real1 + imag1 * imag1;
@@ -219,15 +228,19 @@ static void record_cdm(FastPMSolver * solver, FastPMForceEvent * event, FastPMRe
             printf("Delta_k from tape = %g + %gi, abs = %g\n", real2, imag2, value2);
             // Start integrating
             int j = 0;
-            
+            double realDel[recorder->maxsteps], ImaDel[recorder->maxsteps];
+            double realNu[recorder->maxsteps], ImaNu[recorder->maxsteps];
             for(j=0;j<=recorder->step;++j){
-                recorder->Nu[recorder->step][ind + 0] = simpson(recorder->tape, 0.1, recorder->step, ind);
-                recorder->Nu[recorder->step][ind + 1] = simpson(recorder->tape, 0.1, recorder->step, ind+1);
+                realDel[j] = recorder->tape[j][ind + 0];
+                ImaDel[j] = recorder->tape[j][ind + 1];
+                recorder->Nu[j][ind + 0] = DelNu(realDel, 0.1, recorder->step, recorder->time_step, scark);
+                recorder->Nu[j][ind + 1] = DelNu(ImaDel, 0.1, recorder->step, recorder->time_step, scark);
             }
-            double real3 = recorder->Nu[recorder->step][ind + 0];
-            double imag3 = recorder->Nu[recorder->step][ind + 1];
-            double value3 = real3 * real3 + imag3 * imag3;
-            printf("Nu = %g + %gi, abs = %g\n", real3, imag3, value3);
+            
+//            double real3 = recorder->Nu[recorder->step][ind + 0];
+//            double imag3 = recorder->Nu[recorder->step][ind + 1];
+//            double value3 = real3 * real3 + imag3 * imag3;
+//            printf("Nu = %g + %gi, abs = %g\n", real3, imag3, value3);
 
 
         }
@@ -246,22 +259,22 @@ static void Del_interp(FastPMRecorder * recorder)
 }
 
 
-double simpson(double ** data, double da, int i, int ind){
+double simpson(double * data, double da, int i){
 
     double inte = 0;
     int j = 0;
     for(j =0;j<=i;++j){
         if(!(i%2)){
-            if(j == 0) inte = da/3*data[0][ind];
-            else if (j>0 && j%2 && j<i) inte += 4*da/3*data[j][ind];
-            else if (j>0 && !(j%2) && j<i) inte += 2*da/3*data[j][ind];
-            else if (j == i) inte += da/3*data[j][ind];
+            if(j == 0) inte = da/3*data[0];
+            else if (j>0 && j%2 && j<i) inte += 4*da/3*data[j];
+            else if (j>0 && !(j%2) && j<i) inte += 2*da/3*data[j];
+            else if (j == i) inte += da/3*data[j];
         }
         else{
-            if(j == 0) inte = da/3*data[0][ind];
-            else if (j>0 && j%2 && j<i) inte += 2*da/3*data[j][ind];
-            else if (j>0 && !(j%2) && j<i) inte += 4*da/3*data[j][ind];
-            else if (j == i) inte += da/3*data[j][ind];
+            if(j == 0) inte = da/3*data[0];
+            else if (j>0 && j%2 && j<i) inte += 2*da/3*data[j];
+            else if (j>0 && !(j%2) && j<i) inte += 4*da/3*data[j];
+            else if (j == i) inte += da/3*data[j];
         }
     }
     return inte;
