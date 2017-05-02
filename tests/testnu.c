@@ -51,7 +51,7 @@ record_cdm(FastPMSolver * solver, FastPMForceEvent * event, FastPMRecorder * rec
 static void Del_interp(FastPMRecorder * recorder);
 
 double Sint(double a, FastPMSolver * solver){
-    return 1.0/pow(a,3)/HubbleEa(a, solver->cosmology);  //How to implement this correctly? HubbleEa(a, fastpm->cosmology)*71.9*71.9*71.9*71.9*71.9*71.9*71.9*71.9; //70.0; //Planck15.H((1.-a)/a)
+    return 1.0/pow(a,3)/HubbleEa(a, solver->cosmology);  //How to implement this correctly? HubbleEa(a, fastpm->cosmology)*71.9; //70.0; //Planck15.H((1.-a)/a)
 }
 
 double SupCon(double ai,double af, FastPMSolver * solver){
@@ -82,7 +82,7 @@ double CurlyI(double x){
 
 double Inte(double a,double k,double ai,double af, FastPMSolver * solver){
     double x = kdifs(k,ai,af,a,solver)*chunit;
-    return CurlyI(x)*kdifs(k,ai,af,a,solver)/k/pow(a,2);// Planck15.H((1.-a)/a).value/a**2
+    return CurlyI(x)*kdifs(k,ai,af,a,solver)/k/HubbleEa(a, solver->cosmology)/pow(a,2);// Planck15.H((1.-a)/a).value/a**2
 }
 
 double simpson(double * data, double da, int i);
@@ -91,7 +91,7 @@ double DelNu(double * Del,double da,int i, double * a, double k, FastPMSolver * 
     double data[10];//FIXME hard coded array size
     int j = 0;
     for(;j<=i;++j){
-        data[j] = Inte(a[j],k,a[0],a[9],solver)*Del[j];/*af = a[9]?*/
+        data[j] = Inte(a[j],k,a[0],a[9],solver)*Del[j];/*af = a[9]? Checked python, ok.*/
     }
     double result = simpson(data, da, i);
     return result;
