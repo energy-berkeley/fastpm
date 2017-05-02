@@ -12,6 +12,9 @@
 #include <fastpm/libfastpm.h>
 #include <fastpm/logging.h>
 
+#include "../libfastpm/pmpfft.h"
+
+//#include <fastpm/cosmology.h>
 //We would like to couple neutrinos into the dark matter evolution.
 //Stage 1: read in and record all the overdensity field. ---- done
 //Let's do Simpson rule instead. So no interpolation needed. -- to stage 3
@@ -47,22 +50,22 @@ record_cdm(FastPMSolver * solver, FastPMForceEvent * event, FastPMRecorder * rec
 
 static void Del_interp(FastPMRecorder * recorder);
 
-double Sint(double a){
-    return 1.0/pow(a,3)/20.0;  //How to implement this correctly? HubbleEa(a, fastpm->cosmology)*71.9*71.9*71.9*71.9*71.9*71.9*71.9*71.9; //70.0; //Planck15.H((1.-a)/a)
+double Sint(double a, FastPMSolver * solver){
+    return 1.0/pow(a,3)/HubbleEa(a, solver->cosmology);  //How to implement this correctly? HubbleEa(a, fastpm->cosmology)*71.9*71.9*71.9*71.9*71.9*71.9*71.9*71.9; //70.0; //Planck15.H((1.-a)/a)
 }
 
-double SupCon(double ai,double af){
+double SupCon(double ai,double af, FastPMSolver * solver){
     gsl_integration_workspace * w= gsl_integration_workspace_alloc (1000);
     double result, error;
     gsl_function F;
 
     F.function = &Sint;
-    gsl_integration_qags(&F, ai, af, 1e-7, 1000, w, &result, &error);
+    gsl_integration_qags(&F, ai, af, 0, 1e-7, 1000, w, &result, &error);
     return result;
 }
 
-double kdifs(double k,double ai,double af,double a){
-    return k*SupCon(a,af);
+double kdifs(double k,double ai,double af,double a, FastPMSolver * solver){
+    return k*SupCon(a,af,solver);
 }
 
 double CurlyInum(double x){
@@ -77,18 +80,18 @@ double CurlyI(double x){
     return CurlyInum(x)/CurlyIden(x);
 }
 
-double Inte(double a,double k,double ai,double af){
-    double x = kdifs(k,ai,af,a)*chunit;
-    return CurlyI(x)*kdifs(k,ai,af,a)/k/pow(a,2);// Planck15.H((1.-a)/a).value/a**2
+double Inte(double a,double k,double ai,double af, FastPMSolver * solver){
+    double x = kdifs(k,ai,af,a,solver)*chunit;
+    return CurlyI(x)*kdifs(k,ai,af,a,solver)/k/pow(a,2);// Planck15.H((1.-a)/a).value/a**2
 }
 
 double simpson(double * data, double da, int i);
 
-double DelNu(double * Del,double da,int i, double * a, double k){
+double DelNu(double * Del,double da,int i, double * a, double k, FastPMSolver * solver){
     double data[10];//FIXME hard coded array size
     int j = 0;
     for(;j<=i;++j){
-        data[j] = Inte(a[j],k,a[0],a[9])*Del[j];/*af = a[9]?*/
+        data[j] = Inte(a[j],k,a[0],a[9],solver)*Del[j];/*af = a[9]?*/
     }
     double result = simpson(data, da, i);
     return result;
@@ -112,8 +115,8 @@ int main(int argc, char * argv[]) {
 //        0.9 ,  0.95,  1.0};
 
     FastPMConfig * config = & (FastPMConfig) {
-        .nc = 256,
-        .boxsize = 256.,
+        .nc = 128,
+        .boxsize = 128.,
         .alloc_factor = 2.0,
         .omega_m = 0.292,
         .vpminit = (VPMInit[]) {
@@ -141,7 +144,7 @@ int main(int argc, char * argv[]) {
 
     /* First establish the truth by 2lpt -- this will be replaced with PM. */
     struct fastpm_powerspec_eh_params eh = {
-        .Norm = 10000.0, /* FIXME: this is not any particular sigma8. */
+        .Norm = 3000.0, /* FIXME: this is not any particular sigma8. */
         .hubble_param = 0.7,
         .omegam = 0.260,
         .omegab = 0.044,
@@ -206,17 +209,27 @@ static void record_cdm(FastPMSolver * solver, FastPMForceEvent * event, FastPMRe
     sprintf(buf, "Smooth%0.04f.dat", event->a_f);
     printf("The step %g\n", event->a_f);
     FastPMFloat * dst = recorder->tape[recorder->step];
-    pm_assign(solver->pm, event->delta_k, dst);
+    PM * pm = solver->pm;
+    pm_assign(pm, event->delta_k, dst);
     PMKIter kiter;
-    for(pm_kiter_init(solver->pm, &kiter);
+    for(pm_kiter_init(pm, &kiter);
             !pm_kiter_stop(&kiter);
             pm_kiter_next(&kiter)) {
 
+        int d = 0;
         ptrdiff_t ind = kiter.ind;
         if(kiter.iabs[0] == 1 &&
                 kiter.iabs[1] == 1 &&
                 kiter.iabs[2] == 1) {
-            double scark = sqrt(kiter.kk[0] + kiter.kk[1] + kiter.kk[2]);
+
+            ptrdiff_t kk = 0.;
+            for(d = 0; d < 3; d++) {
+                double ik = kiter.iabs[d];
+                if(ik > pm->Nmesh[d] / 2) ik -= pm->Nmesh[d];
+                kk += ik * ik;
+            }
+
+            double scark = sqrt(kk) * 2 * M_PI / pm_boxsize(pm)[0];
             double real1 = event->delta_k[ind + 0];
             double imag1 = event->delta_k[ind + 1];
             double value1 = real1 * real1 + imag1 * imag1;
@@ -233,8 +246,8 @@ static void record_cdm(FastPMSolver * solver, FastPMForceEvent * event, FastPMRe
             for(j=0;j<=recorder->step;++j){
                 realDel[j] = recorder->tape[j][ind + 0];
                 ImaDel[j] = recorder->tape[j][ind + 1];
-                recorder->Nu[j][ind + 0] = DelNu(realDel, 0.1, recorder->step, recorder->time_step, scark);
-                recorder->Nu[j][ind + 1] = DelNu(ImaDel, 0.1, recorder->step, recorder->time_step, scark);
+                recorder->Nu[j][ind + 0] = DelNu(realDel, 0.1, recorder->step, recorder->time_step, scark, solver);
+                recorder->Nu[j][ind + 1] = DelNu(ImaDel, 0.1, recorder->step, recorder->time_step, scark,solver);
             }
             
 //            double real3 = recorder->Nu[recorder->step][ind + 0];
