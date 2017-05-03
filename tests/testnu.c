@@ -50,8 +50,9 @@ record_cdm(FastPMSolver * solver, FastPMForceEvent * event, FastPMRecorder * rec
 
 static void Del_interp(FastPMRecorder * recorder);
 
-double Sint(double a, FastPMSolver * solver){
-    return 1.0/pow(a,3)/HubbleEa(a, solver->cosmology);  //How to implement this correctly? HubbleEa(a, fastpm->cosmology)*71.9; //70.0; //Planck15.H((1.-a)/a)
+double Sint(double a, void * params){// FastPMSolver * solver){
+    FastPMCosmology * cosmo = (FastPMCosmology *) params;
+    return 1.0/pow(a,3)/HubbleEa(a, cosmo);  //How to implement this correctly? HubbleEa(a, fastpm->cosmology)*71.9; //70.0; //Planck15.H((1.-a)/a)
 }
 
 double SupCon(double ai,double af, FastPMSolver * solver){
@@ -60,6 +61,7 @@ double SupCon(double ai,double af, FastPMSolver * solver){
     gsl_function F;
 
     F.function = &Sint;
+    F.params = &solver->cosmology;
     gsl_integration_qags(&F, ai, af, 0, 1e-7, 1000, w, &result, &error);
     return result;
 }
@@ -115,8 +117,8 @@ int main(int argc, char * argv[]) {
 //        0.9 ,  0.95,  1.0};
 
     FastPMConfig * config = & (FastPMConfig) {
-        .nc = 128,
-        .boxsize = 128.,
+        .nc = 64,
+        .boxsize = 64.,
         .alloc_factor = 2.0,
         .omega_m = 0.292,
         .vpminit = (VPMInit[]) {
@@ -250,10 +252,10 @@ static void record_cdm(FastPMSolver * solver, FastPMForceEvent * event, FastPMRe
                 recorder->Nu[j][ind + 1] = DelNu(ImaDel, 0.1, recorder->step, recorder->time_step, scark,solver);
             }
             
-//            double real3 = recorder->Nu[recorder->step][ind + 0];
-//            double imag3 = recorder->Nu[recorder->step][ind + 1];
-//            double value3 = real3 * real3 + imag3 * imag3;
-//            printf("Nu = %g + %gi, abs = %g\n", real3, imag3, value3);
+            double real3 = recorder->Nu[recorder->step][ind + 0];
+            double imag3 = recorder->Nu[recorder->step][ind + 1];
+            double value3 = real3 * real3 + imag3 * imag3;
+            printf("Nu = %g + %gi, abs = %g\n", real3, imag3, value3);
 
 
         }
