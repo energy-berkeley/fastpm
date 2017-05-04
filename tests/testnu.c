@@ -208,7 +208,7 @@ void fastpm_recorder_destroy(FastPMRecorder * recorder)
 static void record_cdm(FastPMSolver * solver, FastPMForceEvent * event, FastPMRecorder * recorder)
 {
     char buf[1024];
-    sprintf(buf, "Smooth%0.04f.dat", event->a_f);
+    sprintf(buf, "Nu%0.04f.dat", event->a_f);
     printf("The step %g\n", event->a_f);
     FastPMFloat * dst = recorder->tape[recorder->step];
     PM * pm = solver->pm;
