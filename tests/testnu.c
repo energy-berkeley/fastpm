@@ -52,17 +52,17 @@ static void Del_interp(FastPMRecorder * recorder);
 
 double Sint(double a, void * params){// FastPMSolver * solver){
     FastPMCosmology * cosmo = (FastPMCosmology *) params;
-    return 1.0/pow(a,3)/HubbleEa(a, cosmo);  //How to implement this correctly? HubbleEa(a, fastpm->cosmology)*71.9; //70.0; //Planck15.H((1.-a)/a)
+    return 1.0/a/a/a/HubbleEa(a, cosmo);  //How to implement this correctly? HubbleEa(a, fastpm->cosmology)*71.9; //70.0; //Planck15.H((1.-a)/a)
 }
 
 double SupCon(double ai,double af, FastPMSolver * solver){
-    gsl_integration_workspace * w= gsl_integration_workspace_alloc (1000);
+    gsl_integration_workspace * w= gsl_integration_workspace_alloc (100);
     double result, error;
     gsl_function F;
 
     F.function = &Sint;
     F.params = &solver->cosmology;
-    gsl_integration_qags(&F, ai, af, 0, 1e-7, 1000, w, &result, &error);
+//    gsl_integration_qags(&F, ai, af, 1, 1, 100, w, &result, &error);
     return result;
 }
 
@@ -71,11 +71,11 @@ double kdifs(double k,double ai,double af,double a, FastPMSolver * solver){
 }
 
 double CurlyInum(double x){
-    return (1.0+0.0168*pow(x,2)+0.0407*pow(x,4));
+    return (1.0+0.0168*x*x+0.0407*pow(x,4));
 }
 
 double CurlyIden(double x){
-    return 1.0+2.1734*pow(x,2)+1.6787*pow(x,4.1811)+0.1467*pow(x,8);
+    return 1.0+2.1734*x*x+1.6787*pow(x,4.1811)+0.1467*pow(x,8);
 }
 
 double CurlyI(double x){
@@ -84,7 +84,7 @@ double CurlyI(double x){
 
 double Inte(double a,double k,double ai,double af, FastPMSolver * solver){
     double x = kdifs(k,ai,af,a,solver)*chunit;
-    return CurlyI(x)*kdifs(k,ai,af,a,solver)/k/HubbleEa(a, solver->cosmology)/pow(a,2);// Planck15.H((1.-a)/a).value/a**2
+    return CurlyI(x)*kdifs(k,ai,af,a,solver)/k/HubbleEa(a, solver->cosmology)/a/a;// Planck15.H((1.-a)/a).value/a**2
 }
 
 double simpson(double * data, double da, int i);
@@ -220,9 +220,6 @@ static void record_cdm(FastPMSolver * solver, FastPMForceEvent * event, FastPMRe
 
         int d = 0;
         ptrdiff_t ind = kiter.ind;
-        if(kiter.iabs[0] == 1 &&
-                kiter.iabs[1] == 1 &&
-                kiter.iabs[2] == 1) {
 
             ptrdiff_t kk = 0.;
             for(d = 0; d < 3; d++) {
@@ -232,15 +229,6 @@ static void record_cdm(FastPMSolver * solver, FastPMForceEvent * event, FastPMRe
             }
 
             double scark = sqrt(kk) * 2 * M_PI / pm_boxsize(pm)[0];
-            double real1 = event->delta_k[ind + 0];
-            double imag1 = event->delta_k[ind + 1];
-            double value1 = real1 * real1 + imag1 * imag1;
-            if(recorder->tape[recorder->step]) printf("The tape was initialized!\n");
-            double real2 = recorder->tape[recorder->step][ind + 0];
-            double imag2 = recorder->tape[recorder->step][ind + 1];
-            double value2 = real2 * real2 + imag2 * imag2;
-            printf("Delta_k from event = %g + %gi, abs = %g\n", real1, imag1, value1);
-            printf("Delta_k from tape = %g + %gi, abs = %g\n", real2, imag2, value2);
             // Start integrating
             int j = 0;
             double realDel[recorder->maxsteps], ImaDel[recorder->maxsteps];
@@ -252,13 +240,8 @@ static void record_cdm(FastPMSolver * solver, FastPMForceEvent * event, FastPMRe
                 recorder->Nu[j][ind + 1] = DelNu(ImaDel, 0.1, recorder->step, recorder->time_step, scark,solver);
             }
             
-            double real3 = recorder->Nu[recorder->step][ind + 0];
-            double imag3 = recorder->Nu[recorder->step][ind + 1];
-            double value3 = real3 * real3 + imag3 * imag3;
-            printf("Nu = %g + %gi, abs = %g\n", real3, imag3, value3);
 
 
-        }
 
     } 
     recorder->step = recorder->step +1;
