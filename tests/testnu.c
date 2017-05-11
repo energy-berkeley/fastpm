@@ -23,7 +23,7 @@
 //Stage 3: integrate out the overdendity --- in progress.
 //Stage 4: feed the neutrino overdensity into force calculation
 
-
+//check units and numbers, k is absolutely not right.
 // Side check: time fourier transform of the delta k, frequncy amplitude to look at smothness.
 // Change to check with linear theory.
 
@@ -67,7 +67,16 @@ double SupCon(double ai,double af, FastPMSolver * solver){
 }
 
 double kdifs(double k,double ai,double af,double a, FastPMSolver * solver){
-    return k*SupCon(a,af,solver);
+    FILE *read;
+    int i = 0;
+    double Sup[10];
+    read = fopen( "SupCon.txt", "r" );
+    for(i=0;i<=9;++i) {
+        fscanf(read, "%f", &Sup[i]); //hard coded no of step 10
+    }
+    int j = (int) a/0.1; // hard coded da = 0.1
+    fclose(read);
+    return k*Sup[j];//SupCon(a,af,solver);
 }
 
 double CurlyInum(double x){
@@ -117,8 +126,8 @@ int main(int argc, char * argv[]) {
 //        0.9 ,  0.95,  1.0};
 
     FastPMConfig * config = & (FastPMConfig) {
-        .nc = 64,
-        .boxsize = 64.,
+        .nc = 16,
+        .boxsize = 16.,
         .alloc_factor = 2.0,
         .omega_m = 0.292,
         .vpminit = (VPMInit[]) {
