@@ -27,9 +27,10 @@
 // Side check: time fourier transform of the delta k, frequncy amplitude to look at smothness.
 // Change to check with linear theory.
 
+#define hhhh  70
 #define m  0.6; //in eV
 #define c  3e8; // in m/s
-#define chunit  1.68e-4/0.6/0.678*3e8/1000;
+#define chunit  1.68e-4/0.6/0.678*3e8/1000; //used m, hubble and c
 
 typedef struct {
     FastPMSolver * solver;
@@ -39,6 +40,7 @@ typedef struct {
     int step;
     int maxsteps;
     double * time_step;
+    double *SupCo;
 } FastPMRecorder;
 
 void fastpm_recorder_init(FastPMRecorder * recorder, FastPMSolver * solver, int maxsteps, double * time_step);
@@ -52,7 +54,7 @@ static void Del_interp(FastPMRecorder * recorder);
 
 double Sint(double a, void * params){// FastPMSolver * solver){
     FastPMCosmology * cosmo = (FastPMCosmology *) params;
-    return 1.0/a/a/a/HubbleEa(a, cosmo);  //How to implement this correctly? HubbleEa(a, fastpm->cosmology)*71.9; //70.0; //Planck15.H((1.-a)/a)
+    return 1.0/a/a/a/HubbleEa(a, cosmo)/hhhh;  //How to implement this correctly? HubbleEa(a, fastpm->cosmology)*71.9; //70.0; //Planck15.H((1.-a)/a)
 }
 
 double SupCon(double ai,double af, FastPMSolver * solver){
@@ -62,21 +64,13 @@ double SupCon(double ai,double af, FastPMSolver * solver){
 
     F.function = &Sint;
     F.params = &solver->cosmology;
-//    gsl_integration_qags(&F, ai, af, 1, 1, 100, w, &result, &error);
+    gsl_integration_qags(&F, ai, af, 0, 1e-7, 100, w, &result, &error);
     return result;
 }
 
-double kdifs(double k,double ai,double af,double a, FastPMSolver * solver){
-    FILE *read;
-    int i = 0;
-    double Sup[10];
-    read = fopen( "SupCon.txt", "r" );
-    for(i=0;i<=9;++i) {
-        fscanf(read, "%f", &Sup[i]); //hard coded no of step 10
-    }
-    int j = (int) a/0.1; // hard coded da = 0.1
-    fclose(read);
-    return k*Sup[j];//SupCon(a,af,solver);
+double kdifs(double k, FastPMRecorder * recorder, int j){
+    double difs = recorder->SupCo[j];//SupCon(a,af,solver);
+    return k*difs;
 }
 
 double CurlyInum(double x){
@@ -91,20 +85,21 @@ double CurlyI(double x){
     return CurlyInum(x)/CurlyIden(x);
 }
 
-double Inte(double a,double k,double ai,double af, FastPMSolver * solver){
-    double x = kdifs(k,ai,af,a,solver)*chunit;
-    return CurlyI(x)*kdifs(k,ai,af,a,solver)/k/HubbleEa(a, solver->cosmology)/a/a;// Planck15.H((1.-a)/a).value/a**2
+double Inte(double k,FastPMRecorder * recorder,int j){
+    double a = recorder->time_step[j];
+    double x = kdifs(k,recorder,j)*chunit;
+    return CurlyI(x)*kdifs(k,recorder,j)/k/HubbleEa(a, recorder->solver->cosmology)/hhhh/a/a;// Planck15.H((1.-a)/a).value/a**2
 }
 
 double simpson(double * data, double da, int i);
 
-double DelNu(double * Del,double da,int i, double * a, double k, FastPMSolver * solver){
-    double data[10];//FIXME hard coded array size
+double DelNu(double * Del,double k, FastPMRecorder * recorder){
+    double data[recorder->maxsteps];//FIXME hard coded array size,fixed!
     int j = 0;
-    for(;j<=i;++j){
-        data[j] = Inte(a[j],k,a[0],a[9],solver)*Del[j];/*af = a[9]? Checked python, ok.*/
+    for(;j<=recorder->step;++j){
+        data[j] = Inte(k,recorder,j)*Del[j];/*af = a[9]? Checked python, ok.*/
     }
-    double result = simpson(data, da, i);
+    double result = simpson(data, recorder->time_step[1]-recorder->time_step[0], recorder->step);
     return result;
 }
 
@@ -120,14 +115,14 @@ int main(int argc, char * argv[]) {
 
     fastpm_set_msg_handler(fastpm_default_msg_handler, comm, NULL);
 
-    double time_step[] = {0.10, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, .9, 1.0};
+    double time_step[] = {0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, .9, 1.0};
 //    double time_step[] = {0.0  ,  0.05,  0.1 ,  0.15,  0.2 ,  0.25,  0.3 ,  0.35,  0.4 ,
 //        0.45,  0.5 ,  0.55,  0.6 ,  0.65,  0.7 ,  0.75,  0.8 ,  0.85,
 //        0.9 ,  0.95,  1.0};
 
     FastPMConfig * config = & (FastPMConfig) {
-        .nc = 16,
-        .boxsize = 16.,
+        .nc = 8,
+        .boxsize = 8.,
         .alloc_factor = 2.0,
         .omega_m = 0.292,
         .vpminit = (VPMInit[]) {
@@ -156,7 +151,7 @@ int main(int argc, char * argv[]) {
     /* First establish the truth by 2lpt -- this will be replaced with PM. */
     struct fastpm_powerspec_eh_params eh = {
         .Norm = 3000.0, /* FIXME: this is not any particular sigma8. */
-        .hubble_param = 0.7,
+        .hubble_param = hhhh/100.0,
         .omegam = 0.260,
         .omegab = 0.044,
     };
@@ -197,6 +192,14 @@ void fastpm_recorder_init(FastPMRecorder * recorder, FastPMSolver * solver, int 
         recorder->Nu[j] = pm_alloc(recorder->pm);
         }
     recorder->time_step = time_step;
+    double SuCo[maxsteps];
+    int l; 
+    for(l =0; l <= (maxsteps-1); ++l){
+        SuCo[l] = SupCon(time_step[l],time_step[maxsteps-1], solver);
+        }
+    recorder->SupCo = SuCo;
+    int mo=0;
+    for(;mo<=maxsteps-1;++mo)printf("SupCon is %g\n", SuCo[mo]);
 }
 
 
@@ -245,8 +248,8 @@ static void record_cdm(FastPMSolver * solver, FastPMForceEvent * event, FastPMRe
             for(j=0;j<=recorder->step;++j){
                 realDel[j] = recorder->tape[j][ind + 0];
                 ImaDel[j] = recorder->tape[j][ind + 1];
-                recorder->Nu[j][ind + 0] = DelNu(realDel, 0.1, recorder->step, recorder->time_step, scark, solver);
-                recorder->Nu[j][ind + 1] = DelNu(ImaDel, 0.1, recorder->step, recorder->time_step, scark,solver);
+                recorder->Nu[j][ind + 0] = DelNu(realDel,scark,recorder);
+                recorder->Nu[j][ind + 1] = DelNu(ImaDel,scark,recorder);
             }
             
 
