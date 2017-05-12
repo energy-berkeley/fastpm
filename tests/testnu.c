@@ -28,6 +28,7 @@
 // Change to check with linear theory.
 
 #define hhhh  70
+#define fnu 0.006
 #define m  0.6; //in eV
 #define c  3e8; // in m/s
 #define chunit  1.68e-4/0.6/0.678*3e8/1000; //used m, hubble and c
@@ -219,14 +220,14 @@ void fastpm_recorder_destroy(FastPMRecorder * recorder)
 
 static void record_cdm(FastPMSolver * solver, FastPMForceEvent * event, FastPMRecorder * recorder)
 {
+    FastPMFloat *Nu = pm_alloc(recorder->pm);
+    FastPMFloat *Delm = pm_alloc(recorder->pm);
     char buf[1024];
-    sprintf(buf, "Cdmdel%0.04f.dat", event->a_f);
-    char Nubuf[1024];
-    sprintf(Nubuf, "Nu%0.04f.dat", event->a_f);
+    sprintf(buf, "Fromdelk%0.04f.dat", event->a_f);
+    char Delmbuf[1024];
+    sprintf(Delmbuf, "Delm%0.04f.dat", event->a_f);
     printf("The step %g\n", event->a_f);
-    FastPMFloat * dst = recorder->tape[recorder->step];
     PM * pm = solver->pm;
-    pm_assign(pm, event->delta_k, dst);
     PMKIter kiter;
     for(pm_kiter_init(pm, &kiter);
             !pm_kiter_stop(&kiter);
@@ -235,33 +236,34 @@ static void record_cdm(FastPMSolver * solver, FastPMForceEvent * event, FastPMRe
         int d = 0;
         ptrdiff_t ind = kiter.ind;
 
-            ptrdiff_t kk = 0.;
-            for(d = 0; d < 3; d++) {
-                double ik = kiter.iabs[d];
-                if(ik > pm->Nmesh[d] / 2) ik -= pm->Nmesh[d];
-                kk += ik * ik;
-            }
+        ptrdiff_t kk = 0.;
+        for(d = 0; d < 3; d++) {
+            double ik = kiter.iabs[d];
+            if(ik > pm->Nmesh[d] / 2) ik -= pm->Nmesh[d];
+            kk += ik * ik;
+        }
 
-            double scark = sqrt(kk) * 2 * M_PI / pm_boxsize(pm)[0];
-            // Start integrating
-            int j = 0;
-            double realDel[recorder->maxsteps], ImaDel[recorder->maxsteps];
-            double realNu[recorder->maxsteps], ImaNu[recorder->maxsteps];
-            for(j=0;j<=recorder->step;++j){
-                printf("Delta_k is %g\n",event->delta_k[j][ind + 0]);
-                realDel[j] = recorder->tape[j][ind + 0];
-                ImaDel[j] = recorder->tape[j][ind + 1];
-                recorder->Nu[j][ind + 0] = DelNu(realDel,scark,recorder);
-                recorder->Nu[j][ind + 1] = DelNu(ImaDel,scark,recorder);
-            }
-            
-
-
-
+        double scark = sqrt(kk) * 2 * M_PI / pm_boxsize(pm)[0];
+        // Start integrating
+        int j = 0;
+        double realDel[recorder->maxsteps], ImaDel[recorder->maxsteps];
+        for(j=0;j<=recorder->step;++j){
+            printf("Delta_k is %g\n",event->delta_k[ind + 0]);
+            realDel[j] = recorder->tape[j][ind + 0];
+            ImaDel[j] = recorder->tape[j][ind + 1];
+        }
+        Nu[ind + 0] = fnu*DelNu(realDel,scark,recorder);
+        Nu[ind + 1] = fnu*DelNu(ImaDel,scark,recorder);
+        event->delta_k[ind + 0] *= (1-fnu);
+        event->delta_k[ind + 1] *= (1-fnu);
+        Delm[ind + 0] = Nu[ind + 0] + event->delta_k[ind + 0];
+        Delm[ind + 1] = Nu[ind + 1] + event->delta_k[ind + 1];
     } 
+    FastPMFloat * dst = recorder->tape[recorder->step];
+    pm_assign(pm, Delm, dst);
     recorder->step = recorder->step +1;
     write_complex(solver->pm, event->delta_k, buf, "Delta_k", 1);
-    write_complex(solver->pm, recorder->Nu[recorder->step], Nubuf, "Delta_k", 1);
+    write_complex(solver->pm, recorder->tape[recorder->step], Delmbuf, "Delta_k", 1);
 }
 
 static void Del_interp(FastPMRecorder * recorder)
