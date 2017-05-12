@@ -121,8 +121,8 @@ int main(int argc, char * argv[]) {
 //        0.9 ,  0.95,  1.0};
 
     FastPMConfig * config = & (FastPMConfig) {
-        .nc = 8,
-        .boxsize = 8.,
+        .nc = 128,
+        .boxsize = 128.,
         .alloc_factor = 2.0,
         .omega_m = 0.292,
         .vpminit = (VPMInit[]) {
@@ -220,7 +220,9 @@ void fastpm_recorder_destroy(FastPMRecorder * recorder)
 static void record_cdm(FastPMSolver * solver, FastPMForceEvent * event, FastPMRecorder * recorder)
 {
     char buf[1024];
-    sprintf(buf, "Nu%0.04f.dat", event->a_f);
+    sprintf(buf, "Cdmdel%0.04f.dat", event->a_f);
+    char Nubuf[1024];
+    sprintf(Nubuf, "Nu%0.04f.dat", event->a_f);
     printf("The step %g\n", event->a_f);
     FastPMFloat * dst = recorder->tape[recorder->step];
     PM * pm = solver->pm;
@@ -246,6 +248,7 @@ static void record_cdm(FastPMSolver * solver, FastPMForceEvent * event, FastPMRe
             double realDel[recorder->maxsteps], ImaDel[recorder->maxsteps];
             double realNu[recorder->maxsteps], ImaNu[recorder->maxsteps];
             for(j=0;j<=recorder->step;++j){
+                printf("Delta_k is %g\n",event->delta_k[j][ind + 0]);
                 realDel[j] = recorder->tape[j][ind + 0];
                 ImaDel[j] = recorder->tape[j][ind + 1];
                 recorder->Nu[j][ind + 0] = DelNu(realDel,scark,recorder);
@@ -258,6 +261,7 @@ static void record_cdm(FastPMSolver * solver, FastPMForceEvent * event, FastPMRe
     } 
     recorder->step = recorder->step +1;
     write_complex(solver->pm, event->delta_k, buf, "Delta_k", 1);
+    write_complex(solver->pm, recorder->Nu[recorder->step], Nubuf, "Delta_k", 1);
 }
 
 static void Del_interp(FastPMRecorder * recorder)
