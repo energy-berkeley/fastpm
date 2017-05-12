@@ -5,6 +5,7 @@
 #include <fastpm/prof.h>
 #include <fastpm/transfer.h>
 #include <fastpm/logging.h>
+#include <fastpm/string.h>
 
 #include "pmpfft.h"
 #include "pmghosts.h"
@@ -239,8 +240,40 @@ fastpm_solver_gravity_calculate(FastPMSolver * fastpm,
     /*emit before force event*/
     CLOCK(beforeforce);
     FastPMForceEvent eventb[1];
-    eventb->delta_k = delta_k;
+
+    FastPMPowerSpectrum * ps;
+    fnu = 0.1;
+    // Or only current time step read?
+    char file[1024];
+    char str[15];
+    sprintf(str, "%d", eventb->step);
+    sprintf(file, "/home/energy/grad_fPM/cleanPM/fastpm/tests/cdm%s.dat", str);
+    printf("cdm filename%s\n", file);
+    char *content = fastpm_file_get_content(file);//casting?!
+
+    if(content!=0) printf("Content%s!\n",content);
+    fastpm_powerspectrum_init_from_string(ps, content);
+    //    printf("Hi hi! %g",fastpm_powerspectrum_eval(ps,0.001));
+    eventb->step += 1;
     eventb->a_f = trans->a.f;
+    PMKIter kiter;
+    double k0 = 2 * M_PI / pm_boxsize(ps->pm)[0];
+    for(pm_kiter_init(ps->pm, &kiter);
+            !pm_kiter_stop(&kiter);
+            pm_kiter_next(&kiter)) {
+        int d;
+        ptrdiff_t kk = 0.;
+        for(d = 0; d < 3; d++) {
+            double ik = kiter.iabs[d];
+            if(ik > pm->Nmesh[d] / 2) ik -= pm->Nmesh[d];
+            kk += ik * ik;
+            double k = sqrt(kk) * k0;
+            Transfer = ((1-fnu)*fastpm_powerspectrum_eval(ps, k)+fnu*fastpm_powerspectrum_eval(ps, k))
+                        /fastpm_powerspectrum_eval(ps, k);
+            delta_k = delta_k*Transfer;
+            eventb->delta_k = delta_k;
+        }
+
     fastpm_solver_emit_event(fastpm, FASTPM_EVENT_FORCE, FASTPM_EVENT_STAGE_BEFORE, (FastPMEvent*) eventb);
     LEAVE(beforeforce);
 
