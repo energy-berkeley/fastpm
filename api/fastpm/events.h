@@ -35,6 +35,7 @@ typedef struct {
     FastPMEvent base;
     FastPMFloat * delta_k;
     double a_f;
+    int step;
 } FastPMForceEvent;
 
 struct FastPMEventHandler {
