@@ -241,38 +241,54 @@ fastpm_solver_gravity_calculate(FastPMSolver * fastpm,
     CLOCK(beforeforce);
     FastPMForceEvent eventb[1];
 
-    FastPMPowerSpectrum * ps;
-    fnu = 0.1;
+    FastPMPowerSpectrum pscdm[1];
+    FastPMPowerSpectrum psnu[1];
+    double fnu = 0.006;
     // Or only current time step read?
-    char file[1024];
-    char str[15];
-    sprintf(str, "%d", eventb->step);
-    sprintf(file, "/home/energy/grad_fPM/cleanPM/fastpm/tests/cdm%s.dat", str);
-    printf("cdm filename%s\n", file);
-    char *content = fastpm_file_get_content(file);//casting?!
+    char filecdm[1024];
+    char filenu[1024];
 
-    if(content!=0) printf("Content%s!\n",content);
-    fastpm_powerspectrum_init_from_string(ps, content);
+    sprintf(filecdm, "/home/energy/grad_fPM/cleanPM/fastpm/tests/cdm%1.3f.dat", trans->a.f);
+    sprintf(filenu, "/home/energy/grad_fPM/cleanPM/fastpm/tests/nu%1.3f.dat", trans->a.f);
+//    printf("cdm filename=%s\n", file);
+    printf("steps = %1.3f\n",trans->a.f);
+    char *contentcdm = fastpm_file_get_content(filecdm);//casting?!
+    char *contentnu = fastpm_file_get_content(filenu);//casting?!
+
+//    if(content!=0) printf("Content%s!\n",content);
+    printf("Hi hi 1\n");
+    fastpm_powerspectrum_init_from_string(pscdm, contentcdm);
+    fastpm_powerspectrum_init_from_string(psnu, contentnu);
+    printf("Hi hi ih\n");
+    free(contentcdm);
+    free(contentnu);
     //    printf("Hi hi! %g",fastpm_powerspectrum_eval(ps,0.001));
     eventb->step += 1;
     eventb->a_f = trans->a.f;
     PMKIter kiter;
-    double k0 = 2 * M_PI / pm_boxsize(ps->pm)[0];
-    for(pm_kiter_init(ps->pm, &kiter);
+    double k0 = 2 * M_PI / pm_boxsize(pm)[0];
+    for(pm_kiter_init(pm, &kiter);
             !pm_kiter_stop(&kiter);
             pm_kiter_next(&kiter)) {
         int d;
         ptrdiff_t kk = 0.;
+        ptrdiff_t ind = kiter.ind;
         for(d = 0; d < 3; d++) {
             double ik = kiter.iabs[d];
             if(ik > pm->Nmesh[d] / 2) ik -= pm->Nmesh[d];
             kk += ik * ik;
-            double k = sqrt(kk) * k0;
-            Transfer = ((1-fnu)*fastpm_powerspectrum_eval(ps, k)+fnu*fastpm_powerspectrum_eval(ps, k))
-                        /fastpm_powerspectrum_eval(ps, k);
-            delta_k = delta_k*Transfer;
-            eventb->delta_k = delta_k;
         }
+        double k = sqrt(kk) * k0;
+//        printf("k is %f\n",k);
+//        printf("transfer is %f\n",ps->k[1]);
+//        if(fastpm_powerspectrum_eval(ps, k)) printf("evaluated %g\n",fabs(fastpm_powerspectrum_eval(ps, k)));
+        double Transfer = ((1-fnu)*fabs(fastpm_powerspectrum_eval(pscdm, k))
+                            +fnu*fabs(fastpm_powerspectrum_eval(pscdm, k)))
+                            / fabs(fastpm_powerspectrum_eval(pscdm, k));
+//        delta_k[ind+0] = delta_k[ind+0]*Transfer;
+//        delta_k[ind+1] = delta_k[ind+1]*Transfer;
+        eventb->delta_k = delta_k;
+    }
 
     fastpm_solver_emit_event(fastpm, FASTPM_EVENT_FORCE, FASTPM_EVENT_STAGE_BEFORE, (FastPMEvent*) eventb);
     LEAVE(beforeforce);
