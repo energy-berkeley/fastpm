@@ -15,6 +15,6 @@ set -x
 #mpirun -n 4 $FASTPM fastPM20.lua fastpm || fail
 
 
-mpirun -n 4 $FASTPM fastPM20.lua fastpm || fail 
+./$FASTPM fastPM20.lua fastpm || fail 
 
 
