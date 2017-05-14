@@ -35,7 +35,7 @@
 typedef struct {
     FastPMSolver * solver;
     FastPMFloat ** tape;
-    FastPMFloat ** Nu;
+//    FastPMFloat ** Nu;
     PM * pm;
     int step;
     int maxsteps;
@@ -183,13 +183,13 @@ void fastpm_recorder_init(FastPMRecorder * recorder, FastPMSolver * solver, int 
     recorder->maxsteps = maxsteps;
     recorder->solver = solver;
     recorder->tape = calloc(maxsteps, sizeof(FastPMStore));
-    recorder->Nu = calloc(maxsteps, sizeof(FastPMStore));
+//    recorder->Nu = calloc(maxsteps, sizeof(FastPMStore));
 	recorder->step = 0;
     recorder->pm = fastpm_find_pm(solver, 1.0);
     int j =0;
     for(j =0; j <= (maxsteps-1); ++j){
         recorder->tape[j] = pm_alloc(recorder->pm);
-        recorder->Nu[j] = pm_alloc(recorder->pm);
+//        recorder->Nu[j] = pm_alloc(recorder->pm);
         }
     recorder->time_step = time_step;
     double SuCo[maxsteps];
@@ -208,10 +208,10 @@ void fastpm_recorder_destroy(FastPMRecorder * recorder)
     int j =0;
     for(j =0; j <= (recorder->maxsteps-1); ++j){
         pm_free(recorder->pm, recorder->tape[j]);
-        pm_free(recorder->pm, recorder->Nu[j]);
+//        pm_free(recorder->pm, recorder->Nu[j]);
         }
     free(recorder->tape);
-    free(recorder->Nu);
+//    free(recorder->Nu);
 }
 
 
@@ -248,8 +248,8 @@ static void record_cdm(FastPMSolver * solver, FastPMForceEvent * event, FastPMRe
             for(j=0;j<=recorder->step;++j){
                 realDel[j] = recorder->tape[j][ind + 0];
                 ImaDel[j] = recorder->tape[j][ind + 1];
-                recorder->Nu[j][ind + 0] = DelNu(realDel,scark,recorder);
-                recorder->Nu[j][ind + 1] = DelNu(ImaDel,scark,recorder);
+//                recorder->Nu[j][ind + 0] = DelNu(realDel,scark,recorder);
+//                recorder->Nu[j][ind + 1] = DelNu(ImaDel,scark,recorder);
             }
             
 
