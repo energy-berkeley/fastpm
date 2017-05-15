@@ -27,7 +27,7 @@
 // Side check: time fourier transform of the delta k, frequncy amplitude to look at smothness.
 // Change to check with linear theory.
 
-#define hhhh  70
+#define hhhh  70.0
 #define fnu 0.006
 #define m  0.6; //in eV
 #define c  3e8; // in m/s
@@ -89,7 +89,8 @@ double CurlyI(double x){
 double Inte(double k,FastPMRecorder * recorder,int j){
     double a = recorder->time_step[j];
     double x = kdifs(k,recorder,j)*chunit;
-    return CurlyI(x)*kdifs(k,recorder,j)/k/HubbleEa(a, recorder->solver->cosmology)/hhhh/a/a;// Planck15.H((1.-a)/a).value/a**2
+    double result =  CurlyI(x)*kdifs(k,recorder,j)/k/HubbleEa(a, recorder->solver->cosmology)/hhhh/a/a;// Planck15.H((1.-a)/a).value/a**2
+    return result;
 }
 
 double simpson(double * data, double da, int i);
@@ -122,8 +123,8 @@ int main(int argc, char * argv[]) {
 //        0.9 ,  0.95,  1.0};
 
     FastPMConfig * config = & (FastPMConfig) {
-        .nc = 128,
-        .boxsize = 128.,
+        .nc = 8,
+        .boxsize = 8.,
         .alloc_factor = 2.0,
         .omega_m = 0.292,
         .vpminit = (VPMInit[]) {
@@ -140,6 +141,8 @@ int main(int argc, char * argv[]) {
     FastPMSolver solver[1];
     FastPMRecorder recorder[1];
     fastpm_solver_init(solver, config, comm);
+    fastpm_recorder_init(recorder, solver, 10, time_step);
+    printf("After ini was %g\n", recorder->SupCo[3]);
 
     FastPMFloat * rho_init_ktruth = pm_alloc(solver->basepm);
 
@@ -162,7 +165,6 @@ int main(int argc, char * argv[]) {
     write_complex(solver->basepm, rho_init_ktruth, "Truth", "Delta_k", 1);
     fastpm_solver_setup_ic(solver, rho_init_ktruth);
 
-    fastpm_recorder_init(recorder, solver, 10, time_step);
 
     fastpm_solver_evolve(solver, time_step, sizeof(time_step) / sizeof(time_step[0]));
 
@@ -200,7 +202,7 @@ void fastpm_recorder_init(FastPMRecorder * recorder, FastPMSolver * solver, int 
         }
     recorder->SupCo = SuCo;
     int mo=0;
-    for(;mo<=maxsteps-1;++mo)printf("SupCon is %g\n", SuCo[mo]);
+    for(;mo<=maxsteps-1;++mo)printf("SupCon is %g\n", recorder->SupCo[mo]);
 }
 
 
@@ -222,10 +224,15 @@ static void record_cdm(FastPMSolver * solver, FastPMForceEvent * event, FastPMRe
 {
     FastPMFloat *Nu = pm_alloc(recorder->pm);
     FastPMFloat *Delm = pm_alloc(recorder->pm);
+    FastPMPowerSpectrum ps[1];
     char buf[1024];
-    sprintf(buf, "Fromdelk%0.04f.dat", event->a_f);
+    sprintf(buf, "beforeAddNu%0.04f.dat", event->a_f);
+    char bufaft[1024];
+    sprintf(bufaft, "afterAddNu%0.04f.dat", event->a_f);
     char Delmbuf[1024];
     sprintf(Delmbuf, "Delm%0.04f.dat", event->a_f);
+    char powbuf[15];
+    sprintf(powbuf, "Nupow%0.04f.dat", event->a_f);
     printf("The step %g\n", event->a_f);
     PM * pm = solver->pm;
     PMKIter kiter;
@@ -248,22 +255,35 @@ static void record_cdm(FastPMSolver * solver, FastPMForceEvent * event, FastPMRe
         int j = 0;
         double realDel[recorder->maxsteps], ImaDel[recorder->maxsteps];
         for(j=0;j<=recorder->step;++j){
-            printf("Delta_k is %g\n",event->delta_k[ind + 0]);
+//            printf("Delta_k is %g\n",event->delta_k[ind + 0]);
             realDel[j] = recorder->tape[j][ind + 0];
             ImaDel[j] = recorder->tape[j][ind + 1];
         }
         Nu[ind + 0] = fnu*DelNu(realDel,scark,recorder);
         Nu[ind + 1] = fnu*DelNu(ImaDel,scark,recorder);
+        if(scark>=0.6&&scark<=0.8) printf("Inte was %g\n", recorder->SupCo[3]);
         event->delta_k[ind + 0] *= (1-fnu);
         event->delta_k[ind + 1] *= (1-fnu);
         Delm[ind + 0] = Nu[ind + 0] + event->delta_k[ind + 0];
         Delm[ind + 1] = Nu[ind + 1] + event->delta_k[ind + 1];
+        if(kiter.iabs[0]==5 && kiter.iabs[1]==5 && kiter.iabs[2]==5) printf("Delm is %g\n",Delm[ind + 0]);
+        if(kiter.iabs[0]==5 && kiter.iabs[1]==5 && kiter.iabs[2]==5) printf("Nu is %g\n",Nu[ind + 0]);
+        if(kiter.iabs[0]==5 && kiter.iabs[1]==5 && kiter.iabs[2]==5) printf("cdm is %g\n",event->delta_k[ind + 0]);
     } 
     FastPMFloat * dst = recorder->tape[recorder->step];
     pm_assign(pm, Delm, dst);
-    recorder->step = recorder->step +1;
     write_complex(solver->pm, event->delta_k, buf, "Delta_k", 1);
+    pm_assign(pm, Delm, event->delta_k);
+
+    write_complex(solver->pm, event->delta_k, bufaft, "Delta_k", 1);
     write_complex(solver->pm, recorder->tape[recorder->step], Delmbuf, "Delta_k", 1);
+    fastpm_powerspectrum_init_from_delta(ps, pm, Delm, Delm);
+    printf("filename = %s\n", powbuf);
+    fastpm_powerspectrum_write(ps, powbuf, 1);
+
+    recorder->step = recorder->step +1;
+    pm_free(pm,Delm);
+    pm_free(pm,Nu);
 }
 
 static void Del_interp(FastPMRecorder * recorder)
