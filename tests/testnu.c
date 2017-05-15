@@ -230,7 +230,7 @@ static void record_cdm(FastPMSolver * solver, FastPMForceEvent * event, FastPMRe
     sprintf(bufaft, "afterAddNu%0.04f.dat", event->a_f);
     char Delmbuf[1024];
     sprintf(Delmbuf, "Delm%0.04f.dat", event->a_f);
-    char powbuf[15];
+    char powbuf[1024];
     sprintf(powbuf, "Nuden%0.04f.dat", event->a_f);
     printf("The step %g\n", event->a_f);
     PM * pm = solver->pm;
