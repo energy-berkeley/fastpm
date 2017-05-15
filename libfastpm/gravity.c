@@ -288,7 +288,7 @@ fastpm_solver_gravity_calculate(FastPMSolver * fastpm,
         delta_k[ind+0] = delta_k[ind+0]*Transfer;
         delta_k[ind+1] = delta_k[ind+1]*Transfer;
     }
-    pm_assign(pm,delta_k,eventb->delta_k);
+    eventb->delta_k = delta_k;
 
     fastpm_solver_emit_event(fastpm, FASTPM_EVENT_FORCE, FASTPM_EVENT_STAGE_BEFORE, (FastPMEvent*) eventb);
     LEAVE(beforeforce);
