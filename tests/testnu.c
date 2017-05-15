@@ -189,18 +189,17 @@ void fastpm_recorder_init(FastPMRecorder * recorder, FastPMSolver * solver, int 
     recorder->Nu = calloc(maxsteps, sizeof(FastPMStore));
 	recorder->step = 0;
     recorder->pm = fastpm_find_pm(solver, 1.0);
+    recorder->SupCo = calloc(maxsteps, sizeof(double));;
     int j =0;
     for(j =0; j <= (maxsteps-1); ++j){
         recorder->tape[j] = pm_alloc(recorder->pm);
         recorder->Nu[j] = pm_alloc(recorder->pm);
         }
     recorder->time_step = time_step;
-    double SuCo[maxsteps];
     int l; 
     for(l =0; l <= (maxsteps-1); ++l){
-        SuCo[l] = SupCon(time_step[l],time_step[maxsteps-1], solver);
+        recorder->SupCo[l] = SupCon(time_step[l],time_step[maxsteps-1], solver);
         }
-    recorder->SupCo = SuCo;
     int mo=0;
     for(;mo<=maxsteps-1;++mo)printf("SupCon is %g\n", recorder->SupCo[mo]);
 }
@@ -232,7 +231,7 @@ static void record_cdm(FastPMSolver * solver, FastPMForceEvent * event, FastPMRe
     char Delmbuf[1024];
     sprintf(Delmbuf, "Delm%0.04f.dat", event->a_f);
     char powbuf[15];
-    sprintf(powbuf, "Nupow%0.04f.dat", event->a_f);
+    sprintf(powbuf, "Nuden%0.04f.dat", event->a_f);
     printf("The step %g\n", event->a_f);
     PM * pm = solver->pm;
     PMKIter kiter;
@@ -279,8 +278,9 @@ static void record_cdm(FastPMSolver * solver, FastPMForceEvent * event, FastPMRe
     write_complex(solver->pm, recorder->tape[recorder->step], Delmbuf, "Delta_k", 1);
     fastpm_powerspectrum_init_from_delta(ps, pm, Delm, Delm);
     printf("filename = %s\n", powbuf);
-    fastpm_powerspectrum_write(ps, powbuf, 1);
-
+    if(solver->ThisTask == 0) {
+        fastpm_powerspectrum_write(ps, powbuf, 1);
+    }
     recorder->step = recorder->step +1;
     pm_free(pm,Delm);
     pm_free(pm,Nu);
